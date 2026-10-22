@@ -56,3 +56,45 @@ async def buscar_filmes(generos, quantidade=20, ordenar_por_nota=False):
         })
 
     return filmes
+
+
+async def buscar_detalhes_filme(filme_id: int):
+    if not TMDB_API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="Chave TMDB não configurada."
+        )
+
+    url = f"{TMDB_URL}/movie/{filme_id}"
+
+    parametros = {
+        "api_key": TMDB_API_KEY,
+        "language": "pt-BR"
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resposta = await client.get(
+                url,
+                params=parametros
+            )
+            resposta.raise_for_status()
+
+            dados = resposta.json()
+
+            return {
+                "id": dados["id"],
+                "titulo": dados["title"],
+                "sinopse": dados.get("overview", ""),
+                "generos": [
+                    genero["id"]
+                    for genero in dados.get("genres", [])
+                ]
+            }
+
+    except httpx.HTTPError:
+        raise HTTPException(
+            status_code=502,
+            detail="Erro ao buscar detalhes do filme no TMDB."
+        )
+
