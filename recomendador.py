@@ -105,7 +105,7 @@ def recomendar_filmes(filmes, preferencias, avaliados):
             )
         })
 
-        return sorted(
+    return sorted(
         recomendacoes,
         key=lambda filme: filme["score_recomendacao"],
         reverse=True

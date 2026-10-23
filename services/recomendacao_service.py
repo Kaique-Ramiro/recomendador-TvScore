@@ -2,7 +2,7 @@
 import asyncio
 
 from recomendador import identificar_preferencias, recomendar_filmes
-from services.tmdb_service import buscar_filmes, buscar_detalhes_filme
+from services.tmdb_service import buscar_filmes_diversificados, buscar_detalhes_filme
 from services.similaridade_service import carregar_modelo
 
 
@@ -18,7 +18,7 @@ async def gerar_recomendacoes(avaliacoes, favoritos):
     if not generos:
         generos = [28, 878]
 
-    filmes = await buscar_filmes(generos)
+    filmes = await buscar_filmes_diversificados(generos, quantidade=40)
 
     ids_excluidos = (
         {a["id"] for a in avaliacoes}
