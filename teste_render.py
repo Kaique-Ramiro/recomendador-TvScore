@@ -21,8 +21,14 @@ def testar_transformers():
 
 @app.get("/teste-modelo-sentimento")
 def testar_modelo_sentimento():
+    print("INICIANDO TESTE DE SENTIMENTOS", flush=True)
+
     from services.sentimento_service import analisar_sentimento
 
+    print("IMPORT CONCLUIDO", flush=True)
+
     resultado = analisar_sentimento("Esse filme é incrível!")
+
+    print("ANALISE CONCLUIDA", flush=True)
 
     return resultado
