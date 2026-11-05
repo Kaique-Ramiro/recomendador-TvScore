@@ -12,3 +12,9 @@ def testar_imports():
     from sentence_transformers import SentenceTransformer
 
     return {"mensagem": "Bibliotecas de IA importadas com sucesso!"}
+
+@app.get("/teste-transformers")
+def testar_transformers():
+    from transformers import pipeline
+
+    return {"mensagem": "Transformers importado com sucesso!"}
