@@ -7,7 +7,11 @@ from services.similaridade_service import carregar_modelo
 
 
 async def gerar_recomendacoes(avaliacoes, favoritos):
-    preferencias = identificar_preferencias(avaliacoes, favoritos)
+    preferencias = await asyncio.to_thread(
+    identificar_preferencias,
+    avaliacoes,
+    favoritos
+)
 
     generos = [
         genero

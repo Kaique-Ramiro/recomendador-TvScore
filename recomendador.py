@@ -1,8 +1,36 @@
 
 from collections import defaultdict
 
+import os
+import httpx
 
-from services.sentimento_service import analisar_sentimento
+from dotenv import load_dotenv
+
+load_dotenv()
+
+def analisar_sentimento(comentario: str):
+    url = os.getenv("SENTIMENTOS_API_URL")
+
+    if not url:
+        raise RuntimeError(
+            "SENTIMENTOS_API_URL não configurada"
+        )
+
+    try:
+        resposta = httpx.post(
+            f"{url.rstrip('/')}/sentimentos/analisar",
+            json={"comentario": comentario},
+            timeout=60
+        )
+
+        resposta.raise_for_status()
+        return resposta.json()
+
+    except httpx.HTTPError as erro:
+        raise RuntimeError(
+            f"Erro ao consultar o serviço de sentimentos: {erro}"
+        ) from erro
+
 
 
 def identificar_preferencias(avaliacoes, favoritos):
