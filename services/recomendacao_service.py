@@ -3,7 +3,7 @@ import asyncio
 
 from recomendador import identificar_preferencias, recomendar_filmes
 from services.tmdb_service import buscar_filmes_diversificados, buscar_detalhes_filme
-from services.similaridade_service import carregar_modelo
+from services.similaridade_service import gerar_embeddings_cloudflare
 
 
 async def gerar_recomendacoes(avaliacoes, favoritos):
@@ -52,36 +52,49 @@ async def gerar_recomendacoes(avaliacoes, favoritos):
         except Exception:
             continue
 
+    
     if sinopses_preferidas and resultado:
-        modelo = carregar_modelo()
-
         textos = sinopses_preferidas + [
             filme.get("sinopse") or ""
             for filme in resultado
         ]
 
-        embeddings = await asyncio.to_thread(
-            modelo.encode,
-            textos,
-            normalize_embeddings=True
-        )
+        # Gera embeddings usando a IA da Cloudflare
+        embeddings = await gerar_embeddings_cloudflare(textos)
 
         quantidade_referencias = len(sinopses_preferidas)
+
         referencias = embeddings[:quantidade_referencias]
         candidatos = embeddings[quantidade_referencias:]
 
-        # Similaridade máxima com os filmes favoritos
-        similaridades = candidatos @ referencias.T
+        # Calcula a similaridade do cosseno
+        def similaridade_cosseno(vetor1, vetor2):
+            produto = sum(
+                a * b for a, b in zip(vetor1, vetor2)
+            )
 
-        for filme, valores in zip(resultado, similaridades):
-            similaridade = max(0, float(valores.max()))
+            norma1 = sum(a * a for a in vetor1) ** 0.5
+            norma2 = sum(b * b for b in vetor2) ** 0.5
+
+            if norma1 == 0 or norma2 == 0:
+                return 0.0
+
+            return produto / (norma1 * norma2)
+
+        for filme, candidato in zip(resultado, candidatos):
+            similaridade = max(
+                0.0,
+                max(
+                    similaridade_cosseno(candidato, referencia)
+                    for referencia in referencias
+                )
+            )
 
             filme["similaridade_sinopse"] = round(
                 similaridade, 4
             )
 
-            # Combina algoritmo anterior (80%)
-            # com similaridade semântica (20%)
+            # Mantém os pesos originais do TVScore
             filme["score_recomendacao"] = round(
                 filme["score_recomendacao"] * 0.8
                 + similaridade * 100 * 0.2,
@@ -92,6 +105,7 @@ async def gerar_recomendacoes(avaliacoes, favoritos):
             key=lambda filme: filme["score_recomendacao"],
             reverse=True
         )
+
 
     recomendacoes = resultado[:10]
 
