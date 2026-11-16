@@ -1,104 +1,92 @@
 
-from functools import lru_cache
-import json
+import os
+import re
 
-import numpy as np
-import onnxruntime as ort
-from huggingface_hub import hf_hub_download
-from tokenizers import Tokenizer
+import httpx
+from dotenv import load_dotenv
 
+load_dotenv()
 
-MODELO = "Horizon-Labs/multilingual-sentiment-small"
+ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID")
+API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN")
 
-
-@lru_cache(maxsize=1)
-def carregar_modelo():
-    print("Carregando modelo ONNX quantizado...")
-
-    caminho_modelo = hf_hub_download(
-        repo_id=MODELO,
-        filename="onnx/model_quantized.onnx"
-    )
-
-    caminho_tokenizer = hf_hub_download(
-        repo_id=MODELO,
-        filename="tokenizer.json"
-    )
-
-    caminho_config = hf_hub_download(
-        repo_id=MODELO,
-        filename="config.json"
-    )
-
-    tokenizer = Tokenizer.from_file(caminho_tokenizer)
-    tokenizer.enable_truncation(max_length=256)
-
-    with open(caminho_config, encoding="utf-8") as arquivo:
-        config = json.load(arquivo)
-
-    labels = config.get("id2label", {})
-
-    sessao = ort.InferenceSession(
-        caminho_modelo,
-        providers=["CPUExecutionProvider"]
-    )
-
-    print("Modelo ONNX carregado!")
-
-    return sessao, tokenizer, labels
+MODELO = "@cf/qwen/qwen3.8-27b"
 
 
 def analisar_sentimento(comentario: str):
-    sessao, tokenizer, labels = carregar_modelo()
+    if not ACCOUNT_ID or not API_TOKEN:
+        raise RuntimeError(
+            "Credenciais da Cloudflare não configuradas no .env"
+        )
 
-    entrada = tokenizer.encode(comentario)
+    url = (
+        "https://api.cloudflare.com/client/v4/accounts/"
+        f"{ACCOUNT_ID}/ai/run/{MODELO}"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {API_TOKEN}",
+        "Content-Type": "application/json"
+    }
 
     dados = {
-        "input_ids": np.array(
-            [entrada.ids], dtype=np.int64
-        ),
-        "attention_mask": np.array(
-            [entrada.attention_mask], dtype=np.int64
-        ),
-        "token_type_ids": np.array(
-            [entrada.type_ids], dtype=np.int64
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Você é um classificador de sentimentos "
+                    "de comentários sobre filmes e séries. "
+                    "Classifique o sentimento do comentário "
+                    "como POSITIVO, NEGATIVO ou NEUTRO. "
+                    "Responda exclusivamente com uma dessas "
+                    "três palavras, sem explicações."
+                )
+            },
+            {
+                "role": "user",
+                "content": comentario
+            }
+        ],
+        "temperature": 0,
+        "max_tokens": 100
+    }
+
+    with httpx.Client(timeout=120) as cliente:
+        resposta = cliente.post(
+            url,
+            headers=headers,
+            json=dados
         )
-    }
+        resposta.raise_for_status()
 
-    entradas_modelo = {
-        item.name: dados[item.name]
-        for item in sessao.get_inputs()
-    }
+    resultado = resposta.json()
 
-    logits = sessao.run(
-        None, entradas_modelo
-    )[0][0]
+    if not resultado.get("success", False):
+        raise RuntimeError(
+            f"Erro na Cloudflare: {resultado.get('errors')}"
+        )
 
-    logits = logits - np.max(logits)
-    probabilidades = np.exp(logits)
-    probabilidades /= probabilidades.sum()
+    conteudo = resultado.get("result", {})
 
-    indice = int(np.argmax(probabilidades))
-    label = labels.get(str(indice), "").lower()
+    texto = conteudo.get("response", "")
 
-    sentimentos = {
-        "negative": "NEGATIVO",
-        "neutral": "NEUTRO",
-        "positive": "POSITIVO",
-        "negativo": "NEGATIVO",
-        "neutro": "NEUTRO",
-        "positivo": "POSITIVO"
-    }
+    if not texto and conteudo.get("choices"):
+        texto = conteudo["choices"][0]["message"]["content"]
 
-    if label not in sentimentos:
-        raise ValueError(
-            f"Rótulo do modelo não reconhecido: {label!r}. "
-            f"Configuração: {labels}"
+    texto = str(texto).strip().upper()
+
+    # Aceita somente uma classificação válida
+    correspondencia = re.fullmatch(
+        r"(POSITIVO|NEGATIVO|NEUTRO)[.!]?",
+        texto
+    )
+
+    if not correspondencia:
+        raise RuntimeError(
+            f"Classificação inesperada da IA: {texto}"
         )
 
     return {
-        "sentimento": sentimentos[label],
-        "confianca": round(
-            float(probabilidades[indice]), 4
-        )
+        "sentimento": correspondencia.group(1),
+        "confianca": 1.0
     }

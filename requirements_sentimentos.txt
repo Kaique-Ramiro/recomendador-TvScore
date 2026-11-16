@@ -1,7 +1,5 @@
 
 fastapi
 uvicorn
-onnxruntime
-huggingface_hub
-tokenizers
-numpy
+httpx
+python-dotenv
