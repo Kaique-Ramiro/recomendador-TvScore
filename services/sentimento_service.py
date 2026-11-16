@@ -86,7 +86,8 @@ def analisar_sentimento(comentario: str):
             f"Classificação inesperada da IA: {texto}"
         )
 
+    
     return {
-        "sentimento": correspondencia.group(1),
-        "confianca": 1.0
+        "sentimento": correspondencia.group(1)
     }
+
