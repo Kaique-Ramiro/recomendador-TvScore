@@ -52,9 +52,8 @@ def identificar_preferencias(avaliacoes, favoritos):
                 "NEGATIVO": -1.5
             }
 
-            pontos += (
-                ajustes.get(analise["sentimento"], 0)
-                * analise["confianca"]
+            pontos += ajustes.get(
+                analise["sentimento"], 0
             )
 
         for genero in avaliacao["generos"]:
