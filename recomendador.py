@@ -43,20 +43,27 @@ def identificar_preferencias(avaliacoes, favoritos):
         # A nota continua sendo o fator principal
         pontos = nota - 5
 
-        if comentario and comentario.strip():
-            analise = analisar_sentimento(comentario)
+        
+    if comentario and comentario.strip():
+       try:
+           analise = analisar_sentimento(comentario)
 
-            ajustes = {
-                "POSITIVO": 1.5,
-                "NEUTRO": 0,
-                "NEGATIVO": -1.5
-            }
+           ajustes = {
+               "POSITIVO": 1.5,
+               "NEUTRO": 0,
+               "NEGATIVO": -1.5
+           }
+   
+           pontos += ajustes.get(
+               analise["sentimento"], 0
+           )
 
-            pontos += ajustes.get(
-                analise["sentimento"], 0
-            )
+       except (RuntimeError, KeyError, ValueError) as erro:
+          print(f"IA de sentimentos indisponível: {erro}")
+          # Continua usando apenas a nota do usuário
 
-        for genero in avaliacao["generos"]:
+
+    for genero in avaliacao["generos"]:
             pontuacao[genero] += pontos
 
     for favorito in favoritos:

@@ -1,4 +1,4 @@
-
+import httpx
 import asyncio
 
 from recomendador import identificar_preferencias, recomendar_filmes
@@ -76,7 +76,21 @@ async def gerar_recomendacoes_series(avaliacoes, favoritos):
             for serie in resultado
         ]
 
-        embeddings = await gerar_embeddings_cloudflare(textos)
+        try:
+           embeddings = await gerar_embeddings_cloudflare(textos)
+
+        except (httpx.HTTPError, RuntimeError, ValueError) as erro:
+           print(f"Similaridade de séries indisponível: {erro}")
+
+        recomendacoes = resultado[:10]
+
+        return {
+           "tipo_conteudo": "SERIE",
+           "preferencias": preferencias,
+           "total": len(recomendacoes),
+           "recomendacoes": recomendacoes
+        }
+
 
         quantidade_referencias = len(sinopses_preferidas)
 
