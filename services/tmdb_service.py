@@ -46,6 +46,7 @@ async def buscar_filmes(generos, quantidade=20, ordenar_por_nota=False):
         filmes.append({
             "id": filme["id"],
             "titulo": filme.get("title"),
+            "ano_lancamento": (filme.get("release_date") or "")[:4] or None,
             "sinopse": filme.get("overview"),
             "nota": filme.get("vote_average") or 0,
             "generos": filme.get("genre_ids", []),
@@ -85,6 +86,7 @@ async def buscar_detalhes_filme(filme_id: int):
             return {
                 "id": dados["id"],
                 "titulo": dados["title"],
+                "ano_lancamento": (dados.get("release_date") or "")[:4] or None,
                 "sinopse": dados.get("overview", ""),
                 "generos": [
                     genero["id"]
@@ -142,6 +144,7 @@ async def buscar_filmes_diversificados(generos, quantidade=40):
                 filmes_encontrados[filme["id"]] = {
                     "id": filme["id"],
                     "titulo": filme.get("title"),
+                    "ano_lancamento": (filme.get("release_date") or "")[:4] or None,
                     "sinopse": filme.get("overview"),
                     "nota": filme.get("vote_average") or 0,
                     "generos": filme.get("genre_ids", []),
@@ -200,6 +203,7 @@ async def buscar_series_diversificadas(generos, quantidade=40):
                 series_encontradas[serie["id"]] = {
                     "id": serie["id"],
                     "titulo": serie.get("name"),
+                    "ano_lancamento": (serie.get("first_air_date") or "")[:4] or None,
                     "sinopse": serie.get("overview"),
                     "nota": serie.get("vote_average") or 0,
                     "generos": serie.get("genre_ids", []),
@@ -236,6 +240,7 @@ async def buscar_detalhes_serie(serie_id: int):
             return {
                 "id": dados["id"],
                 "titulo": dados.get("name"),
+                "ano_lancamento": (dados.get("first_air_date") or "")[:4] or None,
                 "sinopse": dados.get("overview", ""),
                 "generos": [
                     genero["id"]
