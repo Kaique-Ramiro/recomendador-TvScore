@@ -1,4 +1,5 @@
 
+import asyncio
 import os
 import httpx
 
@@ -10,39 +11,50 @@ load_dotenv()
 JAVA_API_URL = os.getenv(
     "JAVA_API_URL",
     "http://localhost:8080"
-)
+).rstrip("/")
 
 
 async def buscar_dados_usuario(token: str):
-    headers = {
-        "Authorization": f"Bearer {token}"
+    rotas = {
+        "avaliacoes": "/api/avaliacoes/minhas",
+        "favoritos": "/api/favoritos",
+        "generos": "/api/usuarios/eu/generos",
+        "preferidos": "/api/usuarios/eu/conteudos-preferidos"
     }
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            resposta_avaliacoes = await client.get(
-                f"{JAVA_API_URL}/api/avaliacoes/minhas",
-                headers=headers
+
+            async def consultar(chave, rota):
+                resposta = await client.get(
+                    JAVA_API_URL + rota,
+                    headers={
+                        "Authorization": f"Bearer {token}"
+                    }
+                )
+
+                resposta.raise_for_status()
+                return chave, resposta.json()
+
+            resultados = await asyncio.wait_for(
+                asyncio.gather(
+                    *[
+                        consultar(chave, rota)
+                        for chave, rota in rotas.items()
+                    ]
+                ),
+                timeout=20
             )
 
-            resposta_favoritos = await client.get(
-                f"{JAVA_API_URL}/api/favoritos",
-                headers=headers
-            )
-
-            resposta_avaliacoes.raise_for_status()
-            resposta_favoritos.raise_for_status()
-
-            return {
-                "avaliacoes": resposta_avaliacoes.json(),
-                "favoritos": resposta_favoritos.json()
-            }
+            return dict(resultados)
 
     except httpx.HTTPStatusError as erro:
-        if erro.response.status_code in (401, 403):
+        status = erro.response.status_code
+
+        if status in (401, 403):
             raise HTTPException(
-                status_code=erro.response.status_code,
-                detail="Acesso não autorizado pelo backend Java."
+                status_code=status,
+                detail="Acesso não autorizado pelo Java."
             )
 
         raise HTTPException(
@@ -50,8 +62,8 @@ async def buscar_dados_usuario(token: str):
             detail="Erro ao consultar o backend Java."
         )
 
-    except httpx.RequestError:
+    except (httpx.RequestError, asyncio.TimeoutError):
         raise HTTPException(
             status_code=502,
-            detail="Não foi possível conectar ao backend Java."
+            detail="Não foi possível consultar o backend Java."
         )

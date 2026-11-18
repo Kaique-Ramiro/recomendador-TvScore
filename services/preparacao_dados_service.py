@@ -1,3 +1,4 @@
+from services.onboarding_service import preparar_onboarding
 
 from services.tmdb_service import (
     buscar_detalhes_filme,
@@ -65,6 +66,8 @@ async def preparar_dados_usuario(dados_java):
         except Exception:
             continue
 
+    onboarding = await preparar_onboarding(dados_java)
+
     return {
         "filmes": {
             "avaliacoes": avaliacoes_filmes,
@@ -73,5 +76,6 @@ async def preparar_dados_usuario(dados_java):
         "series": {
             "avaliacoes": avaliacoes_series,
             "favoritos": favoritos_series
-        }
+        },
+        "onboarding": onboarding
     }

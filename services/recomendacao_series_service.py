@@ -1,3 +1,4 @@
+
 import httpx
 import asyncio
 
@@ -7,14 +8,30 @@ from services.tmdb_service import (
     buscar_detalhes_serie
 )
 from services.similaridade_service import gerar_embeddings_cloudflare
+from services.onboarding_service import aplicar_sinais
 
 
-async def gerar_recomendacoes_series(avaliacoes, favoritos):
-    # Calcula as preferências do usuário
+async def gerar_recomendacoes_series(
+    avaliacoes,
+    favoritos,
+    onboarding=None
+):
+    onboarding = onboarding or {
+        "generos": [],
+        "preferidos": []
+    }
+
+    # Calcula as preferências com avaliações e favoritos
     preferencias = await asyncio.to_thread(
         identificar_preferencias,
         avaliacoes,
         favoritos
+    )
+
+    # Acrescenta as preferências escolhidas no cadastro
+    preferencias = aplicar_sinais(
+        preferencias,
+        onboarding
     )
 
     generos = [
@@ -32,12 +49,16 @@ async def gerar_recomendacoes_series(avaliacoes, favoritos):
         quantidade=40
     )
 
+    # Evita recomendar conteúdos já conhecidos
     ids_excluidos = (
         {a["id"] for a in avaliacoes}
         | {f["id"] for f in favoritos}
+        | {
+            item["id"]
+            for item in onboarding["preferidos"]
+        }
     )
 
-    # Reutiliza o algoritmo de recomendação
     resultado = recomendar_filmes(
         series,
         preferencias,
@@ -68,8 +89,14 @@ async def gerar_recomendacoes_series(avaliacoes, favoritos):
         except Exception:
             continue
 
-    
-    # Compara as sinopses usando IA da Cloudflare
+    # Inclui sinopses das séries escolhidas no cadastro
+    for item in onboarding["preferidos"]:
+        sinopse = item.get("sinopse")
+
+        if sinopse:
+            sinopses_preferidas.append(sinopse)
+
+    # Compara sinopses usando IA da Cloudflare
     if sinopses_preferidas and resultado:
         textos = sinopses_preferidas + [
             serie.get("sinopse") or ""
@@ -77,65 +104,69 @@ async def gerar_recomendacoes_series(avaliacoes, favoritos):
         ]
 
         try:
-           embeddings = await gerar_embeddings_cloudflare(textos)
+            embeddings = await gerar_embeddings_cloudflare(
+                textos
+            )
+
+            quantidade_referencias = len(
+                sinopses_preferidas
+            )
+
+            if len(embeddings) != len(textos):
+                raise ValueError(
+                    "Quantidade de embeddings inválida."
+                )
+
+            referencias = embeddings[:quantidade_referencias]
+            candidatos = embeddings[quantidade_referencias:]
+
+            def similaridade_cosseno(vetor1, vetor2):
+                produto = sum(
+                    a * b for a, b in zip(vetor1, vetor2)
+                )
+
+                norma1 = sum(a * a for a in vetor1) ** 0.5
+                norma2 = sum(b * b for b in vetor2) ** 0.5
+
+                if norma1 == 0 or norma2 == 0:
+                    return 0.0
+
+                return produto / (norma1 * norma2)
+
+            for serie, candidato in zip(
+                resultado,
+                candidatos
+            ):
+                similaridade = max(
+                    0.0,
+                    max(
+                        similaridade_cosseno(
+                            candidato,
+                            referencia
+                        )
+                        for referencia in referencias
+                    )
+                )
+
+                serie["similaridade_sinopse"] = round(
+                    similaridade, 4
+                )
+
+                serie["score_recomendacao"] = round(
+                    serie["score_recomendacao"] * 0.8
+                    + similaridade * 100 * 0.2,
+                    2
+                )
+
+            resultado.sort(
+                key=lambda serie: serie["score_recomendacao"],
+                reverse=True
+            )
 
         except (httpx.HTTPError, RuntimeError, ValueError) as erro:
-           print(f"Similaridade de séries indisponível: {erro}")
-
-        recomendacoes = resultado[:10]
-
-        return {
-           "tipo_conteudo": "SERIE",
-           "preferencias": preferencias,
-           "total": len(recomendacoes),
-           "recomendacoes": recomendacoes
-        }
-
-
-        quantidade_referencias = len(sinopses_preferidas)
-
-        referencias = embeddings[:quantidade_referencias]
-        candidatos = embeddings[quantidade_referencias:]
-
-        # Calcula a similaridade do cosseno
-        def similaridade_cosseno(vetor1, vetor2):
-            produto = sum(
-                a * b for a, b in zip(vetor1, vetor2)
+            print(
+                f"Similaridade de séries indisponível: {erro}"
             )
-
-            norma1 = sum(a * a for a in vetor1) ** 0.5
-            norma2 = sum(b * b for b in vetor2) ** 0.5
-
-            if norma1 == 0 or norma2 == 0:
-                return 0.0
-
-            return produto / (norma1 * norma2)
-
-        for serie, candidato in zip(resultado, candidatos):
-            similaridade = max(
-                0.0,
-                max(
-                    similaridade_cosseno(candidato, referencia)
-                    for referencia in referencias
-                )
-            )
-
-            serie["similaridade_sinopse"] = round(
-                similaridade, 4
-            )
-
-            # Mantém os pesos originais do TVScore
-            serie["score_recomendacao"] = round(
-                serie["score_recomendacao"] * 0.8
-                + similaridade * 100 * 0.2,
-                2
-            )
-
-        resultado.sort(
-            key=lambda serie: serie["score_recomendacao"],
-            reverse=True
-        )
-
 
     recomendacoes = resultado[:10]
 

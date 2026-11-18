@@ -118,10 +118,13 @@ async def recomendar_series_com_java(
     avaliacoes = dados["series"]["avaliacoes"]
     favoritos = dados["series"]["favoritos"]
 
+    
     return await gerar_recomendacoes_series(
         avaliacoes,
-        favoritos
+        favoritos,
+        onboarding=dados["onboarding"]["series"]
     )
+
 
 @router.get("/filmes/java")
 async def recomendar_filmes_com_java(
@@ -140,10 +143,13 @@ async def recomendar_filmes_com_java(
     favoritos = dados["filmes"]["favoritos"]
 
     # Gera recomendações de filmes com IA
+    
     return await gerar_recomendacoes(
         avaliacoes,
-        favoritos
+        favoritos,
+        onboarding=dados["onboarding"]["filmes"]
     )
+
 
 
 
